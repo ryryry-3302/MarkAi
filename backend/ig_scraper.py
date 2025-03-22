@@ -3,7 +3,7 @@ import requests
 import re
 
 # Initialize the ApifyClient with your API token
-apify_token = "apify_api_BO1DQUOl5jfHrV1dpD25hRRIqlEORp2E7I2e"
+apify_token = ""
 client = ApifyClient(apify_token)
 
 # Prepare the Actor input
