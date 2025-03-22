@@ -3,13 +3,14 @@ API routes for the Marketing Analytics Backend.
 Defines Flask routes for handling API requests.
 """
 from flask import Blueprint, jsonify, request, current_app
-from database.models import db, Business, SocialAccount, SocialMetric, Content, Insight
+from database.supabase_client import get_supabase_client
 from analytics.sample_analytics import run_analytics
-from sample_data.processor import process_instagram_content, process_video_content
+from sample_data.instagram_processor import process_instagram_content, process_video_content
 import logging
 import os
 import json
 from pathlib import Path
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -24,38 +25,28 @@ def register_routes(app):
 @api_bp.route('/businesses', methods=['GET'])
 def get_businesses():
     """Get all businesses."""
-    businesses = Business.query.all()
-    result = []
+    supabase = get_supabase_client()
+    businesses = supabase.get_businesses()
     
-    for business in businesses:
-        result.append({
-            'id': business.id,
-            'name': business.name,
-            'industry': business.industry,
-            'created_at': business.created_at.isoformat()
-        })
-    
-    return jsonify(result)
+    return jsonify(businesses)
 
 @api_bp.route('/businesses/<int:business_id>', methods=['GET'])
 def get_business(business_id):
     """Get a specific business by ID."""
-    business = Business.query.get_or_404(business_id)
+    supabase = get_supabase_client()
+    business = supabase.get_business(business_id)
+    
+    if not business:
+        return jsonify({'error': 'Business not found'}), 404
     
     # Get social accounts for the business
-    accounts = []
-    for account in business.social_accounts:
-        accounts.append({
-            'id': account.id,
-            'platform': account.platform,
-            'account_name': account.account_name
-        })
+    accounts = supabase.get_social_accounts(business_id)
     
     result = {
-        'id': business.id,
-        'name': business.name,
-        'industry': business.industry,
-        'created_at': business.created_at.isoformat(),
+        'id': business['id'],
+        'name': business['name'],
+        'industry': business['industry'],
+        'created_at': business.get('created_at', datetime.now().isoformat()),
         'social_accounts': accounts
     }
     
@@ -69,66 +60,56 @@ def create_business():
     if not data or 'name' not in data:
         return jsonify({'error': 'Name is required'}), 400
     
-    business = Business(
+    supabase = get_supabase_client()
+    business = supabase.create_business(
         name=data['name'],
-        industry=data.get('industry')
+        industry=data.get('industry', 'Other')
     )
     
-    db.session.add(business)
-    db.session.commit()
+    if not business:
+        return jsonify({'error': 'Failed to create business'}), 500
     
-    return jsonify({
-        'id': business.id,
-        'name': business.name,
-        'industry': business.industry,
-        'created_at': business.created_at.isoformat()
-    }), 201
+    return jsonify(business), 201
 
 # Social account endpoints
 @api_bp.route('/businesses/<int:business_id>/accounts', methods=['GET'])
 def get_social_accounts(business_id):
     """Get all social accounts for a business."""
-    Business.query.get_or_404(business_id)
-    accounts = SocialAccount.query.filter_by(business_id=business_id).all()
+    supabase = get_supabase_client()
+    business = supabase.get_business(business_id)
     
-    result = []
-    for account in accounts:
-        result.append({
-            'id': account.id,
-            'platform': account.platform,
-            'account_id': account.account_id,
-            'account_name': account.account_name,
-            'created_at': account.created_at.isoformat()
-        })
+    if not business:
+        return jsonify({'error': 'Business not found'}), 404
+        
+    accounts = supabase.get_social_accounts(business_id)
     
-    return jsonify(result)
+    return jsonify(accounts)
 
 @api_bp.route('/businesses/<int:business_id>/accounts', methods=['POST'])
 def create_social_account(business_id):
     """Create a new social account for a business."""
-    Business.query.get_or_404(business_id)
+    supabase = get_supabase_client()
+    business = supabase.get_business(business_id)
+    
+    if not business:
+        return jsonify({'error': 'Business not found'}), 404
+        
     data = request.json
     
     if not data or 'platform' not in data or 'account_id' not in data:
         return jsonify({'error': 'Platform and account_id are required'}), 400
     
-    account = SocialAccount(
+    account = supabase.create_social_account(
         business_id=business_id,
         platform=data['platform'],
         account_id=data['account_id'],
         account_name=data.get('account_name')
     )
     
-    db.session.add(account)
-    db.session.commit()
+    if not account:
+        return jsonify({'error': 'Failed to create social account'}), 500
     
-    return jsonify({
-        'id': account.id,
-        'platform': account.platform,
-        'account_id': account.account_id,
-        'account_name': account.account_name,
-        'created_at': account.created_at.isoformat()
-    }), 201
+    return jsonify(account), 201
 
 # Data processing endpoints
 @api_bp.route('/process', methods=['POST'])
@@ -148,19 +129,26 @@ def process_data():
             return jsonify({'error': 'Metadata or videos directory not found'}), 404
         
         processed_files = []
+        supabase = get_supabase_client()
         
         # Process Instagram content files
         if content_type == 'all' or content_type == 'instagram':
             for file_path in metadata_path.glob('*.json'):
                 with open(file_path, 'r') as f:
                     content_data = json.load(f)
-                    process_instagram_content(content_data)
+                    processed_content = process_instagram_content(content_data)
+                    if processed_content:
+                        # Store processed content in Supabase
+                        supabase.store_content(processed_content)
                     processed_files.append(str(file_path))
         
         # Process video files
         if content_type == 'all' or content_type == 'video':
             for file_path in videos_path.glob('*.mp4'):
-                process_video_content(str(file_path))
+                processed_video = process_video_content(str(file_path))
+                if processed_video:
+                    # Store processed video in Supabase
+                    supabase.store_content(processed_video)
                 processed_files.append(str(file_path))
         
         return jsonify({
@@ -179,8 +167,25 @@ def analyze_data():
     business_id = data.get('business_id')
     
     try:
-        run_analytics()
-        return jsonify({'message': 'Analytics process initiated'})
+        supabase = get_supabase_client()
+        # Get content from Supabase for analysis
+        contents = supabase.get_contents(business_id)
+        
+        if not contents:
+            return jsonify({'message': 'No content found for analysis'}), 404
+            
+        # Run analytics on the retrieved content
+        insights = run_analytics(contents)
+        
+        # Store insights in Supabase
+        if insights:
+            for insight in insights:
+                supabase.store_insight(insight)
+                
+        return jsonify({
+            'message': 'Analytics process completed',
+            'insights_count': len(insights) if insights else 0
+        })
     
     except Exception as e:
         logger.error(f"Error running analytics: {str(e)}")
@@ -194,48 +199,21 @@ def get_insights():
     insight_type = request.args.get('type')
     limit = request.args.get('limit', 10, type=int)
     
-    query = Insight.query
+    supabase = get_supabase_client()
+    insights = supabase.get_insights(business_id, insight_type, limit)
     
-    if business_id:
-        query = query.filter_by(business_id=business_id)
-    
-    if insight_type:
-        query = query.filter_by(insight_type=insight_type)
-    
-    insights = query.order_by(Insight.generated_at.desc()).limit(limit).all()
-    
-    result = []
-    for insight in insights:
-        result.append({
-            'id': insight.id,
-            'business_id': insight.business_id,
-            'insight_type': insight.insight_type,
-            'title': insight.title,
-            'description': insight.description,
-            'confidence_score': insight.confidence_score,
-            'generated_at': insight.generated_at.isoformat(),
-            'data': insight.get_raw_data()
-        })
-    
-    return jsonify(result)
+    return jsonify(insights)
 
 @api_bp.route('/insights/<int:insight_id>', methods=['GET'])
 def get_insight(insight_id):
     """Get a specific insight by ID."""
-    insight = Insight.query.get_or_404(insight_id)
+    supabase = get_supabase_client()
+    insight = supabase.get_insight(insight_id)
     
-    result = {
-        'id': insight.id,
-        'business_id': insight.business_id,
-        'insight_type': insight.insight_type,
-        'title': insight.title,
-        'description': insight.description,
-        'confidence_score': insight.confidence_score,
-        'generated_at': insight.generated_at.isoformat(),
-        'data': insight.get_raw_data()
-    }
+    if not insight:
+        return jsonify({'error': 'Insight not found'}), 404
     
-    return jsonify(result)
+    return jsonify(insight)
 
 # Metrics endpoints
 @api_bp.route('/metrics', methods=['GET'])
@@ -246,37 +224,10 @@ def get_metrics():
     business_id = request.args.get('business_id')
     limit = request.args.get('limit', 30, type=int)
     
-    query = SocialMetric.query.join(SocialAccount)
+    supabase = get_supabase_client()
+    metrics = supabase.get_metrics(account_id, platform, business_id, limit)
     
-    if account_id:
-        query = query.filter(SocialAccount.id == account_id)
-    
-    if platform:
-        query = query.filter(SocialAccount.platform == platform)
-    
-    if business_id:
-        query = query.filter(SocialAccount.business_id == business_id)
-    
-    metrics = query.order_by(SocialMetric.timestamp.desc()).limit(limit).all()
-    
-    result = []
-    for metric in metrics:
-        account = metric.social_account
-        result.append({
-            'id': metric.id,
-            'account_id': account.id,
-            'platform': account.platform,
-            'account_name': account.account_name,
-            'timestamp': metric.timestamp.isoformat(),
-            'followers': metric.followers,
-            'likes': metric.likes,
-            'comments': metric.comments,
-            'shares': metric.shares,
-            'views': metric.views,
-            'platform_data': metric.get_platform_data()
-        })
-    
-    return jsonify(result)
+    return jsonify(metrics)
 
 # Content endpoints
 @api_bp.route('/content', methods=['GET'])

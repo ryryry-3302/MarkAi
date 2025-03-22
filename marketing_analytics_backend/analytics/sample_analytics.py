@@ -12,6 +12,48 @@ from sample_data.processor import process_sample_videos
 
 logger = logging.getLogger(__name__)
 
+def run_analytics():
+    """
+    Run analytics tasks to generate insights from processed content.
+    This function is called from the API routes.
+    """
+    logger.info("Starting analytics tasks with sample data")
+    
+    try:
+        # Get environment variables
+        gemini_api_key = os.environ.get('GEMINI_API_KEY')
+        
+        if not gemini_api_key:
+            logger.error("Gemini API key not configured")
+            return False
+        
+        # Initialize clients
+        supabase = SupabaseClient()
+        gemini_client = GeminiClient(gemini_api_key)
+        
+        # Get all businesses
+        businesses = supabase.get_all('businesses')
+        
+        for business in businesses:
+            try:
+                business_id = business.get('id')
+                logger.info(f"Generating insights for business: {business.get('name')}")
+                
+                # Create analytics processor and run for this business
+                processor = SampleAnalyticsProcessor(gemini_api_key)
+                insights = processor.run_analytics_for_business(business_id)
+                
+                logger.info(f"Generated {len(insights)} insights for business: {business.get('name')}")
+                
+            except Exception as e:
+                logger.error(f"Error generating insights for business {business.get('name')}: {str(e)}")
+        
+        return True
+    
+    except Exception as e:
+        logger.error(f"Error in analytics task: {str(e)}")
+        return False
+
 class SampleAnalyticsProcessor:
     """Processor for running analytics on sample data."""
     

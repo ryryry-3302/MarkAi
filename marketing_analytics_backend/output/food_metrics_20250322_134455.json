@@ -1,0 +1,93 @@
+{
+  "total_content": 1,
+  "total_likes": 274,
+  "total_comments": 24,
+  "average_likes": 274.0,
+  "average_comments": 24.0,
+  "top_hashtags": [
+    [
+      "VincenzosPlate",
+      1
+    ],
+    [
+      "ItalianPasta",
+      1
+    ],
+    [
+      "SausagePasta",
+      1
+    ],
+    [
+      "WeeknightDinner",
+      1
+    ],
+    [
+      "EasyPastaRecipe",
+      1
+    ],
+    [
+      "PastaLovers",
+      1
+    ]
+  ],
+  "top_mentions": [],
+  "top_performing_content": [
+    {
+      "caption": "Craving something creamy, comforting and FULL of flavour? \ud83e\udd24\nThis Italian Sausage Pasta with Mushroom...",
+      "engagement": 298,
+      "account": "20250322",
+      "likes": 274,
+      "comments": 24,
+      "url": "https://www.instagram.com/p/DHgYCD1sP9k/",
+      "shortCode": "DHgYCD1sP9k"
+    }
+  ],
+  "engagement_by_account": {
+    "20250322": {
+      "content_count": 1,
+      "total_likes": 274,
+      "total_comments": 24,
+      "total_engagement": 298,
+      "average_engagement": 298.0
+    }
+  },
+  "content_by_account": {
+    "20250322": 1
+  },
+  "food_categories": {
+    "italian": 1,
+    "seafood": 0,
+    "pasta": 1,
+    "dessert": 0,
+    "appetizer": 0,
+    "main_course": 1,
+    "vegetarian": 0,
+    "other": 0
+  },
+  "food_trends": [
+    [
+      "VincenzosPlate",
+      1
+    ],
+    [
+      "ItalianPasta",
+      1
+    ],
+    [
+      "SausagePasta",
+      1
+    ],
+    [
+      "WeeknightDinner",
+      1
+    ],
+    [
+      "EasyPastaRecipe",
+      1
+    ],
+    [
+      "PastaLovers",
+      1
+    ]
+  ]
+}

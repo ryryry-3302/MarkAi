@@ -16,6 +16,22 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Global Supabase client instance
+_supabase_client = None
+
+def initialize_supabase():
+    """Initialize the global Supabase client."""
+    global _supabase_client
+    if _supabase_client is None:
+        _supabase_client = SupabaseClient()
+    return _supabase_client
+
+def get_supabase_client():
+    """Get the global Supabase client instance."""
+    if _supabase_client is None:
+        return initialize_supabase()
+    return _supabase_client
+
 class SupabaseClient:
     """Client for interacting with Supabase."""
     
@@ -143,6 +159,41 @@ class SupabaseClient:
         
         response = query.execute()
         return response.data
+        
+    def get_contents(self, account_id=None, platform=None, business_id=None, content_type=None, limit=30):
+        """Get content items, optionally filtered by various parameters.
+        
+        Args:
+            account_id: Optional social account ID filter
+            platform: Optional platform filter
+            business_id: Optional business ID filter
+            content_type: Optional content type filter
+            limit: Maximum number of items to return
+            
+        Returns:
+            List of content items
+        """
+        # If we have a business_id but no account_id, we need to get the accounts first
+        if business_id and not account_id:
+            accounts = self.get_social_accounts(business_id)
+            if accounts:
+                account_ids = [account["id"] for account in accounts]
+                query = self.client.table("content").select("*").in_("social_account_id", account_ids)
+            else:
+                return []
+        else:
+            query = self.client.table("content").select("*")
+            if account_id:
+                query = query.eq("social_account_id", account_id)
+        
+        if content_type:
+            query = query.eq("content_type", content_type)
+            
+        # Order by published_at descending and limit results
+        query = query.order("published_at", desc=True).limit(limit)
+        
+        response = query.execute()
+        return response.data
     
     def get_content_item(self, content_id):
         """Get a content item by ID."""
@@ -170,6 +221,54 @@ class SupabaseClient:
             "content_metadata": json.dumps(content_metadata) if content_metadata else None
         }).execute()
         return response.data[0] if response.data else None
+        
+    def store_content(self, content_data):
+        """Store content data from processed files.
+        
+        Args:
+            content_data: Dictionary containing processed content data
+            
+        Returns:
+            The stored content item
+        """
+        # Check if we have a default business and social account for storing content
+        # If not, create them
+        businesses = self.get_businesses()
+        if not businesses:
+            business = self.create_business("Default Business", "Marketing")
+            business_id = business["id"]
+        else:
+            business_id = businesses[0]["id"]
+            
+        accounts = self.get_social_accounts(business_id)
+        if not accounts:
+            platform = content_data.get("platform", "instagram")
+            account = self.create_social_account(
+                business_id=business_id,
+                platform=platform,
+                account_id=content_data.get("ownerUsername", "default_account"),
+                account_name=content_data.get("ownerFullName", "Default Account")
+            )
+            account_id = account["id"]
+        else:
+            account_id = accounts[0]["id"]
+            
+        # Now store the content
+        return self.create_content(
+            social_account_id=account_id,
+            content_id=content_data.get("id", content_data.get("shortCode", str(datetime.now().timestamp()))),
+            content_type=content_data.get("type", "video"),
+            title=content_data.get("caption", "")[:200] if content_data.get("caption") else "",
+            description=content_data.get("caption", ""),
+            url=content_data.get("url", ""),
+            thumbnail_url=content_data.get("displayUrl", ""),
+            published_at=content_data.get("timestamp", datetime.now().isoformat()),
+            likes=content_data.get("likesCount", 0),
+            comments=content_data.get("commentsCount", 0),
+            shares=0,  # Instagram doesn't provide shares count in the new format
+            views=content_data.get("videoViewCount", 0),
+            content_metadata=content_data
+        )
     
     def get_insights(self, business_id=None, insight_type=None):
         """Get insights, optionally filtered by business ID and insight type."""
@@ -194,6 +293,32 @@ class SupabaseClient:
             "timestamp": datetime.now().isoformat()
         }).execute()
         return response.data[0] if response.data else None
+        
+    def store_insight(self, insight_data):
+        """Store insight data generated from content analysis.
+        
+        Args:
+            insight_data: Dictionary containing insight data
+            
+        Returns:
+            The stored insight
+        """
+        # Check if we have a default business for storing insights
+        # If not, create one
+        businesses = self.get_businesses()
+        if not businesses:
+            business = self.create_business("Default Business", "Marketing")
+            business_id = business["id"]
+        else:
+            business_id = businesses[0]["id"]
+            
+        # Now store the insight
+        return self.create_insight(
+            business_id=business_id,
+            insight_type=insight_data.get("insight_type", "general"),
+            title=insight_data.get("title", "Content Analysis"),
+            content=insight_data.get("content", "")
+        )
     
     def bulk_insert(self, table_name, data_list):
         """Insert multiple records into a table."""

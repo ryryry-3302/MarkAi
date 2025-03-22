@@ -1,0 +1,47 @@
+{
+  "total_content": 1,
+  "total_likes": 1873,
+  "total_comments": 61,
+  "total_views": 12709,
+  "avg_likes_per_post": 1873.0,
+  "avg_comments_per_post": 61.0,
+  "top_hashtags": [
+    [
+      "food",
+      1
+    ],
+    [
+      "sanfrancisco",
+      1
+    ],
+    [
+      "tacos",
+      1
+    ],
+    [
+      "bayareafood",
+      1
+    ],
+    [
+      "sanfranciscofood",
+      1
+    ]
+  ],
+  "top_mentions": [
+    [
+      "lataqueriasf",
+      1
+    ]
+  ],
+  "top_performing_content": [
+    {
+      "id": "3499907650555583639",
+      "type": "Video",
+      "caption": "Visiting one of my favorite Taquerias, @lataqueriasf \u2600\ufe0f\n\n\ud83d\udccd2889 Mission St. San Francisco, CA 94110\n\n...",
+      "url": "https://www.instagram.com/p/DCSK3cCCZyX/",
+      "likes": 1873,
+      "comments": 61,
+      "total_engagement": 1934
+    }
+  ]
+}
